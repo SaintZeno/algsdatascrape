@@ -1,0 +1,10 @@
+#/Y3-Split1/Pro-League/EMEA/Day1
+season_split: Y3-Split2
+season_league: Pro-League
+region_page:
+  NA: Overview
+  #EMEA: Overview
+  #APAC_S: Overview
+  #APAC_N: Overview
+  #SA: Overview
+pipeline: statistics
