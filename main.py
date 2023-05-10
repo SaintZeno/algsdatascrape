@@ -2,12 +2,12 @@ import os
 from bs4 import BeautifulSoup
 import requests
 import time
-from fetcherselenium import ALGSFetcherWrapper
+from fetcherwrapper import ALGSFetcherWrapper
 
 
 def main():
     fw=ALGSFetcherWrapper()
-    fetcher = fw.get_data()
+    fetcher = fw.run_pipeline()
     #fetcher = fw.test_get_data()
     
 if __name__ == '__main__':
