@@ -38,15 +38,19 @@ class ALGSFetcherWrapper():
     def create_get_iterator(self):
         if self.config['pipeline'] == 'statistics':
             self.get_iterator = self.fetcher.game_links
-        if self.config['pipeline'] == 'placement':
+        if self.config['pipeline'] == 'game_placement':
+            self.get_iterator = self.fetcher.game_links
+        if self.config['pipeline'] == 'overall_placement':
             pref = '/'.join(['algs', self.config['season_split'], self.config['season_league'], self.config['region']])
-            self.get_iterator = [f'/{pref}/Day{i}' for i in range(1,9)] + [f'/{pref}/Finals']
+            self.get_iterator = [f'/{pref}/Day{i}' for i in range(1,10)] + [f'/{pref}/Finals']
 
     def get_helper_data(self):
         ## hardcoded for now... need to config this
         ## eventually we'll have more helper data ?
         if self.config['pipeline']=='statistics':
             self.fetcher.get_game_urls()
+        if self.config['pipeline']=='game_placement':
+            self.fetcher.get_game_urls()        
         pass
 
     def get_data(self):

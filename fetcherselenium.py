@@ -47,7 +47,9 @@ class ALGSFetcher(Fetcher):
         self.game_links=[]
         self.game_meta={}
         self.game_link_meta={} ## holy fuck we have to remove some of these attributes
-        self.pipeline = {'statistics': self.get_game_stats_data, 'overview': self.game_meta, 'placement': self.get_game_placement_data}
+        self.pipeline = {'statistics': self.get_game_stats_data, 'overview': self.game_meta, 
+                         'overall_placement': self.get_overall_placement_data,
+                         'game_placement': self.get_game_placement_data}
 
     def set_game_meta(self, game_name, game_url):
         # url = '/'.join([self.BaseURL, self.config['season_split'], self.config['season_league'], region, 'Overview'])
@@ -97,7 +99,7 @@ class ALGSFetcher(Fetcher):
             soup = None
         return soup
     
-    def get_placement_data_as_soup(self, url):
+    def get_overall_placement_data_as_soup(self, url):
         '''
         game data page (eg: https://apexlegendsstatus.com/algs/game/09914f6562a97a9dc531f9b141fe482e/statsOverview) 
         needs some extra love to load it w/ selenium; this function provides the juice.
@@ -112,17 +114,6 @@ class ALGSFetcher(Fetcher):
         driver.implicitly_wait(10)
         print(f'driver get to url: {url}')
         driver.get(url=url)
-        #element = WebDriverWait(driver, 30).until(EC.element_to_be_clickable((By.ID, "menu_statsOverview")))
-        #print('found the below number of loader elements')
-        #print(len(driver.find_elements(By.ID, 'loader')))
-        # when we land on the page we get this ugly pop-up that tells us to change to a more optimized browser; we dont care
-        # we just want to close that bitch.
-        #WebDriverWait(driver, 60).until(EC.text_to_be_present_in_element_attribute((By.ID, "loader"), 'style', 'display: none;'))
-        #WebDriverWait(driver, 15).until(EC.text_to_be_present_in_element_attribute((By.XPATH, "//div[@id='loader']"), 'style', 'display: none;'))
-        #elements = driver.find_elements(By.XPATH, "//button[@class='btn-close white']")
-        #self.try_to_click(element_list=elements)
-        #elements = driver.find_elements(By.XPATH, "//button[@class='btn btn-secondary']")
-        #self.try_to_click(element_list=elements)
         try:
             WebDriverWait(driver, 30).until(EC.text_to_be_present_in_element_attribute((By.ID, "standingsLeaderboardDisplay"), 'class', 'table table_darker table-borderless center w-100'))
             page_source = driver.page_source
@@ -133,6 +124,33 @@ class ALGSFetcher(Fetcher):
             soup = None
         return soup
     
+    def get_game_placement_data_as_soup(self, url):
+        '''
+        game data page (eg: https://apexlegendsstatus.com/algs/game/09914f6562a97a9dc531f9b141fe482e/statsOverview) 
+        needs some extra love to load it w/ selenium; this function provides the juice.
+        '''
+        #soup = self.get_url_as_soup(url=self.BaseURL+game_url+'/statsOverview')
+        #<div class="loading" id="loader" style="display: none;">
+        time.sleep(10)
+        options = webdriver.ChromeOptions()
+        #options.add_argument('--incognito')
+        options.add_argument('--headless')
+        driver = webdriver.Chrome(chrome_options=options)
+        driver.implicitly_wait(10)
+        print(f'driver get to url: {url}')
+        driver.get(url=url)
+        try:
+            WebDriverWait(driver, 30).until(EC.text_to_be_present_in_element_attribute((By.ID, "statsOverviewData_Content"), 'class', 'gameReplayData_Content'))
+            WebDriverWait(driver, 30).until(EC.text_to_be_present_in_element_attribute((By.ID, "statsOverviewData_teamRanking_2"), 'class', 'gameReplayData_pos'))
+            page_source = driver.page_source
+            driver.quit()
+            soup = BeautifulSoup(page_source, 'lxml')
+        except TimeoutException as e:
+            #print('Timed out waiting for page to load the required elements')
+            driver.quit()
+            soup = None
+        return soup
+
     def try_to_click(self, element_list):
         for el in element_list:
             try:
@@ -164,13 +182,8 @@ class ALGSFetcher(Fetcher):
             # the blank row won't be appended to the final result but the game_name will exist as a row...
             return None, 'Page Timeout - Could not pull data.'
 
-    def get_placement_data_as_array(self, url):
-        ##############################################################################################################
-        ##############################################################################################################
-        #################### skrr skrrr                             ##################################################
-        ##############################################################################################################
-        ##############################################################################################################
-        soup = self.get_placement_data_as_soup(url=url)
+    def get_overall_placement_data_as_array(self, url):
+        soup = self.get_overall_placement_data_as_soup(url=url)
         if soup:
             ## the below div has the stats data
             table = soup.find_all('table', {'id':'standingsLeaderboardDisplay', 'class':'table table_darker table-borderless center w-100'})
@@ -188,6 +201,31 @@ class ALGSFetcher(Fetcher):
             # the blank row won't be appended to the final result but the game_name will exist as a row...
             return None, 'Page Timeout - Could not pull data.'
     
+    def get_game_placement_data_as_array(self, url):
+        soup = self.get_game_placement_data_as_soup(url=url)
+        if soup:
+            ## the below div has the stats data
+            res = [['team', 'placement']]
+            ## loop thru the divs for gameReplayData_teamElement and id=sOteam-{i}
+            for i in range(2,22):
+                x = soup.find_all('div', {'class':'gameReplayData_teamElement', 'id':f'sOteam-{i}'})
+                if len(x)==0:
+                    pass
+                else:
+                    assert len(x) == 1
+                    placement = x[0].find_all('p', {'class':'gameReplayData_pos'})
+                    assert len(placement) == 1
+                    placement = placement[0].text.replace('#', '')
+                    team = x[0].find_all('span', {'class':'float-start'})
+                    assert len(team) == 1
+                    team = team[0].text
+                    res.append([team, placement])
+            return res, soup.title.text
+        else:
+            # if we couldnt load the page then just fake a blank header, 1 blank row, and game_name.
+            # the blank row won't be appended to the final result but the game_name will exist as a row...
+            return None, 'Page Timeout - Could not pull data.'
+        
     def append_game_meta(self, arr):
         arr[0].extend(list(self.game_meta.keys()))
         for i in arr[1:len(arr)]:
@@ -203,11 +241,20 @@ class ALGSFetcher(Fetcher):
 
     def get_game_placement_data(self, url):
         print(f'getting placement data from {url}')
-        gda, game_name = self.get_placement_data_as_array(url=url)
+        gda, game_name = self.get_game_placement_data_as_array(url=url)
         if gda:
             game_meta = self.set_game_meta(game_name, url)
             gda = self.append_game_meta(gda)
         return gda 
+
+    def get_overall_placement_data(self, url):
+        print(f'getting overall placement data from {url}')
+        gda, game_name = self.get_overall_placement_data_as_array(url=url)
+        if gda:
+            game_meta = self.set_game_meta(game_name, url)
+            gda = self.append_game_meta(gda)
+        return gda 
+
 
     def get_game_urls_from_data_dir(self):
         print('we have game links on disk! reading them now')

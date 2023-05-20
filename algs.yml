@@ -1,6 +1,6 @@
 #/Y3-Split1/Pro-League/EMEA/Day1
 fetcher: ALGSFetcher
-season_split: Y3-Split1
+season_split: Y3-Split2
 season_league: Pro-League
-region: EMEA #APAC_S #APAC_N #SA #NA
-pipeline: placement #statistics #placement
+region: SA #APAC_S #APAC_N #SA #NA #EMEA
+pipeline: game_placement #statistics #overall_placement #game_placement
