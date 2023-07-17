@@ -54,13 +54,17 @@ class ALGSFetcher(Fetcher):
     def set_game_meta(self, game_name, game_url):
         # url = '/'.join([self.BaseURL, self.config['season_split'], self.config['season_league'], region, 'Overview'])
         # meta to start as 
+        href = '/'+game_url.replace(self.BaseURL, '')
         url_split=self.url.replace(self.BaseURL, '').split('/')
         self.game_meta = {'season_split':url_split[1], 
                           'season_league':url_split[2], 
                           'region': url_split[3], 
                           'game_name': game_name}
-        if '/'+game_url.replace(self.BaseURL, '') in self.game_link_meta.keys():
-            self.game_meta.update(self.game_link_meta['/'+game_url.replace(self.BaseURL, '')])
+        if href in self.game_link_meta.keys():
+            if self.game_link_meta[href]['set_name'] not in self.game_link_meta[href]['gameTitle']:
+                self.game_link_meta[href]['gameTitle'] = ' '.join([self.game_link_meta[href]['set_name'], game_name])
+            self.game_link_meta[href].pop('set_name')
+            self.game_meta.update(self.game_link_meta[href])
         return self.game_meta
 
     def get_game_data_as_soup(self, url):
@@ -84,7 +88,7 @@ class ALGSFetcher(Fetcher):
         # when we land on the page we get this ugly pop-up that tells us to change to a more optimized browser; we dont care
         # we just want to close that bitch.
         #WebDriverWait(driver, 60).until(EC.text_to_be_present_in_element_attribute((By.ID, "loader"), 'style', 'display: none;'))
-        WebDriverWait(driver, 15).until(EC.text_to_be_present_in_element_attribute((By.XPATH, "//div[@id='loader']"), 'style', 'display: none;'))
+        #WebDriverWait(driver, 30).until(EC.text_to_be_present_in_element_attribute((By.XPATH, "//div[@id='loader']"), 'style', 'display: none;'))
         elements = driver.find_elements(By.XPATH, "//button[@class='btn-close white']")
         self.try_to_click(element_list=elements)
         elements = driver.find_elements(By.XPATH, "//button[@class='btn btn-secondary']")
@@ -255,7 +259,6 @@ class ALGSFetcher(Fetcher):
             gda = self.append_game_meta(gda)
         return gda 
 
-
     def get_game_urls_from_data_dir(self):
         print('we have game links on disk! reading them now')
         x=open('data/game_links.txt','r').readlines()
@@ -266,7 +269,7 @@ class ALGSFetcher(Fetcher):
         with open('data/game_links.txt', 'w') as f:
             f.writelines('\n'.join(self.game_links))
 
-    def get_game_urls(self, url=None):
+    def get_game_urls1(self, url=None):
         '''
         need to remove game_link dependency b/c it's not needed anymore w/ game_link_meta
         '''
@@ -288,6 +291,73 @@ class ALGSFetcher(Fetcher):
             self.save_game_meta_as_json(game_link_meta)
             self.game_link_meta=game_link_meta
         return self.game_links
+    
+    def get_game_urls(self, url=None):
+        '''
+        need to remove game_link dependency b/c it's not needed anymore w/ game_link_meta
+        '''
+        if 'game_link_meta.json' in os.listdir('data/'):
+            game_link_meta = self.get_game_link_meta_from_data_dir()
+            self.game_links = [i for i in game_link_meta.keys() if i != '#']
+            self.game_link_meta=game_link_meta
+        else:
+            url = self.url + '/Overview'
+            soup = self.get_url_as_soup(url=url)
+            ## grab links from top of overpage
+            x = soup.find('div', {'class': 'algsDaysNav'})
+            gd_x = x.find_all('a', {'class', 'linkWhiteNoStyle'})
+            game_link_meta={}
+            for gd in gd_x:
+                url = gd.attrs['href']
+                game_day = gd.find('div', {'class': lambda l: 'algsDaysNavItem' in l}).text
+                if game_day != 'Overview':
+                    time.sleep(0.5)
+                    ## grab links from subsequent set of games
+                    soup = self.get_url_as_soup(url=self.BaseURL+url)
+                    games = soup.find_all('a', {'class': lambda l: 'algsGameElem linkNoStyle ' in l})
+                    for g in games:
+                        game_link_meta[g.attrs['href']] = {c: g.find('p', {'class': c}).text for c in ['gameTitle', 'gameMap']}
+                        game_link_meta[g.attrs['href']]['set_name'] = game_day
+                        #if game_day not in game_link_meta[g.attrs['href']]['gameTitle']:
+                        #    game_link_meta[g.attrs['href']]['gameTitle'] = ' '.join(game_day)
+            if '#' in game_link_meta.keys():
+                game_link_meta.pop('#')
+            self.game_links = list(game_link_meta.keys())
+            self.save_game_meta_as_json(game_link_meta)
+            self.game_link_meta=game_link_meta
+        return self.game_links
+        
+    def validate_game_titles(self, game_name):
+        '''
+        dumb function bc the game titles are the same on overview page for year3.
+        we're going to pull the game day urls from the top section of the overview page 
+        and then for each game-day url we hit the page and then pull each game url then store
+        stuff in a dict. then we loop thru game_link_meta to make sure expected value is in there
+        otherwise the value is overwritten with expected+game_name...
+        need to just change the whole algo to iterate over game-day urls.
+        '''
+        url = self.url + '/Overview'
+        soup = self.get_url_as_soup(url=url)
+        x = soup.find('div', {'class': 'algsDaysNav'})
+        gd_x = x.find_all('a', {'class', 'linkWhiteNoStyle'})
+        expected_game_day = {}
+        for gd in gd_x:
+            url = gd.attrs['href']
+            game_day = gd.find('div', {'class': lambda l: 'algsDaysNavItem' in l}).text
+            if game_day != 'Overview':
+                soup = self.get_url_as_soup(url=self.BaseURL+url)
+                games = soup.find_all('a', {'class': lambda l: 'algsGameElem linkNoStyle ' in l})
+                for g in games:
+                    expected_game_day[g.attrs['href']] = game_day
+                    #game_link_meta[g.attrs['href']] = {c: game.find('p', {'class': c}).text for c in ['gameTitle', 'gameMap']}
+
+        for url, meta in self.game_link_meta.items():
+            ## if expected game day isn in the gameTitle then just overwrite the title
+            ## with the game-day value. 
+            egd = expected_game_day[url]
+            if egd not in meta['gameTitle']:
+                self.game_link_meta[url]['gameTitle'] = ' '.join([egd, game_name])
+        pass
 
     def save_game_meta_as_json(self, game_link_meta):
         with open('data/game_link_meta.json', 'w') as f:
