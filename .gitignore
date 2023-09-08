@@ -3,3 +3,4 @@ data/*
 results/*
 algs copy.yml
 venv/*
+credentials.yml

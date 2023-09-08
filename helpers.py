@@ -1,5 +1,8 @@
 import time
 import sys
+import psycopg2
+import json
+
 def progressbar(it, prefix="", size=60, out=sys.stdout): 
     '''S/O progress bar. thank you! 
     No external packages. A ready-made piece of code.
@@ -33,4 +36,53 @@ def progressbar(it, prefix="", size=60, out=sys.stdout):
         show(i+1)
     print("\n", flush=True, file=out)
 
-    
+
+def create_table_if_not_exists(pipeline_table, conn_options):
+    """
+    write json object to postgres database
+    :param json_data: json object
+    :param table_name: table name
+    :return: None
+    """
+    conn = psycopg2.connect(
+        **conn_options
+    )
+    cur = conn.cursor()
+    cur.execute("CREATE TABLE IF NOT EXISTS " + pipeline_table)
+    conn.commit()
+    conn.close()
+
+
+
+def write_json_to_postgres(json_data, table_name, conn_options):
+    """
+    write json object to postgres database
+    :param json_data: json object
+    :param table_name: table name
+    :return: None
+    """
+    conn = psycopg2.connect(
+        **conn_options
+    )
+    cur = conn.cursor()
+    #cur.execute("DROP TABLE IF EXISTS " + table_name)
+    #cur.execute("CREATE TABLE " + table_name + " (id serial PRIMARY KEY, data json)")
+    cur.execute("INSERT INTO " + table_name + " (data) VALUES (%s)", (json.dumps(json_data),))
+    conn.commit()
+    conn.close()
+
+
+def read_json_from_postgres(table_name, conn_options):
+    """
+    read json object from postgres database
+    :param table_name: table name
+    :return: json object
+    """
+    conn = psycopg2.connect(
+       **conn_options
+    )
+    cur = conn.cursor()
+    cur.execute("SELECT data FROM " + table_name)
+    data = cur.fetchone()
+    conn.close()
+    return json.loads(data[0])

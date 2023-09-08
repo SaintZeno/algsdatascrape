@@ -13,7 +13,7 @@ import csv
 import json
 from helpers import progressbar
 from fetcherselenium import ALGSFetcher
-
+import psycopg2
 
 class ALGSFetcherWrapper():
     
@@ -62,7 +62,9 @@ class ALGSFetcherWrapper():
             if pipeline_result_array:
                 pipeline_result.extend(pipeline_result_array)
                 self.write_arr_as_csv(pipeline_result, file_name=f'{self.output_file_name_prefix}-subfile.csv')
+                self.write_arr_to_db(pipeline_result_array, table_name = 'algs_' + self.config['pipeline'])
         self.write_arr_as_csv(pipeline_result, file_name=f'{self.output_file_name_prefix}-fullfile.csv')
+        
         if "game_link_meta.json" in os.listdir('data/'):
             os.remove("data/game_link_meta.json")
 
@@ -75,6 +77,29 @@ class ALGSFetcherWrapper():
             writer = csv.writer(f, delimiter=',')
             writer.writerows(arr)
         return True
+
+    def write_arr_to_db(self, arr, table_name):
+        conn_options = self.get_config('credentials.yml').get('database',{})
+        if conn_options:
+            conn = psycopg2.connect(
+            **conn_options
+            )
+            cur = conn.cursor()
+            #cur.execute("DROP TABLE IF EXISTS " + table_name)
+            #cur.execute("CREATE TABLE " + table_name + " (id serial PRIMARY KEY, data json)")
+            fields = ','.join(arr[0]).replace(' ', '_')
+            values = ','.join(['%s'] * len(arr[0]))
+            sql_str = f"INSERT INTO {table_name} ({fields}) VALUES ({values})"
+            force_string = lambda x: [str(i) for i in x]
+            arr1=[force_string(i) for i in arr if i != arr[0]]
+            #print(arr1)
+            cur.executemany(sql_str, arr1)
+            conn.commit()
+            conn.close()
+        else:
+            raise Exception('No connection options provided in credentials config')
+        return True
+
 
     def get_config(self, file_name='algs.yml'):
         return yaml.safe_load(open(file_name, 'r'))
