@@ -55,8 +55,9 @@ class ALGSFetcherWrapper():
 
     def get_data(self):
         pipeline_result=[]
-        
+        j=0
         for i in progressbar(range(len(self.get_iterator)), "Fetching: ", 40):
+            print(f'j')
             url = self.BaseURL + self.get_iterator[i] 
             pipeline_result_array = self.fetcher.pipeline[self.config['pipeline']](url=url)
             if pipeline_result_array:
@@ -64,6 +65,7 @@ class ALGSFetcherWrapper():
                 self.write_arr_as_csv(pipeline_result, file_name=f'{self.output_file_name_prefix}-subfile.csv')
                 self.write_arr_to_db(pipeline_result_array, table_name = 'algs_' + self.config['pipeline'])
         self.write_arr_as_csv(pipeline_result, file_name=f'{self.output_file_name_prefix}-fullfile.csv')
+        j+=1
         
         if "game_link_meta.json" in os.listdir('data/'):
             os.remove("data/game_link_meta.json")
